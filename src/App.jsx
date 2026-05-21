@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus, ChevronLeft, Check, Trash2, UserPlus,
   Search, X, Copy, CheckCheck,
@@ -26,8 +26,14 @@ const F = { sans: "'Plus Jakarta Sans', sans-serif", mono: "'DM Mono', monospace
 /* ─── DB layer ────────────────────────────────────────────── */
 const DB = {
   async get(key) {
-    try { const { data } = await supabase.from("mak_data").select("value").eq("key", key).maybeSingle(); return data?.value ?? null; }
-    catch { return null; }
+    try {
+      const { data } = await supabase.from("mak_data").select("value").eq("key", key).maybeSingle();
+      const v = data?.value;
+      if (!v) return null;
+      /* unwrap legacy wrapped format { _data, _cid } written by a previous code version */
+      if (v && typeof v === "object" && !Array.isArray(v) && "_data" in v) return v._data;
+      return v;
+    } catch { return null; }
   },
   async set(key, val) {
     try { await supabase.from("mak_data").upsert({ key, value: val, updated_at: new Date().toISOString() }, { onConflict: "key" }); }
@@ -251,6 +257,7 @@ function PlayerChip({ name, selected, isPayer, onTap, disabled }) {
 
 /* ─── HOME SCREEN — Portfolio Risk Score layout ────────────── */
 function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, onExpenses, onSquad, onChangeId, onMarkPaid }) {
+  const [showNotifs, setShowNotifs] = useState(false);
   const total = matches.length;
   const isSettled = (m) => { const np = (m.players || []).filter(p => p !== m.payer); return np.length > 0 && np.every(p => m.payments?.[p]); };
   const isPending = (m) => { const np = (m.players || []).filter(p => p !== m.payer); return np.length > 0 && np.some(p => !m.payments?.[p]); };
@@ -264,7 +271,6 @@ function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, o
   const myOwed = myPendingMatches.reduce((s, m) => s + m.totalFee / m.players.length, 0)
                + myPendingExpenses.reduce((s, e) => s + e.totalAmount / e.participants.length, 0);
   const myPendingCount = myPendingMatches.length + myPendingExpenses.length;
-  const myPending = myPendingMatches; /* keep for bell badge */
 
   const balanceSub = myPendingCount === 0
     ? "You're all settled! 🎉"
@@ -274,9 +280,9 @@ function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, o
       ].filter(Boolean).join(" + ");
 
   const rows = [
-    { dot: C.payer,    title: "Your Balance",     sub: balanceSub,                                                                   val: myPendingCount === 0 ? "₹0" : fmtAmt(myOwed),      pct: myOwed > 0 ? Math.min(myOwed / 3000, 1) : 0,         color: myPendingCount === 0 ? C.paid : C.payer },
-    { dot: C.accent,   title: "Pending Matches",  sub: pendingMs.length === 0 ? "All fees recovered ✓" : "Awaiting settlement",     val: pendingMs.length.toString(),                         pct: total ? pendingMs.length / total : 0,                 color: C.accent },
-    { dot: "#ffffff",  title: "Settled Matches",  sub: settledMs.length === total && total > 0 ? "All matches closed!" : "Fees fully recovered", val: settledMs.length.toString(),            pct: total ? settledMs.length / total : 0,                 color: "#ffffff" },
+    { dot: C.payer,   title: "Your Balance",    sub: balanceSub,                                                                                               val: myPendingCount === 0 ? "₹0" : fmtAmt(myOwed), pct: myOwed > 0 ? Math.min(myOwed / 3000, 1) : 0, color: myPendingCount === 0 ? C.paid : C.payer },
+    { dot: C.accent,  title: "Pending Matches", sub: pendingMs.length === 0 ? "All fees recovered ✓" : "Not everyone has paid back yet",                       val: pendingMs.length.toString(),                   pct: total ? pendingMs.length / total : 0,         color: C.accent },
+    { dot: "#ffffff", title: "Settled Matches",  sub: settledMs.length === total && total > 0 ? "All matches fully closed!" : "Everyone paid back the payer",  val: settledMs.length.toString(),                   pct: total ? settledMs.length / total : 0,         color: "#ffffff" },
   ];
 
   return (
@@ -293,12 +299,64 @@ function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, o
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <IconBtn badge={myPending.length > 0}><Bell size={17} color={C.sub} /></IconBtn>
+          <IconBtn badge={myPendingCount > 0} onClick={() => setShowNotifs(v => !v)}><Bell size={17} color={showNotifs ? C.text : C.sub} /></IconBtn>
           <button onClick={onNew} style={{ width: 40, height: 40, borderRadius: 13, background: C.accent, border: "none", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 4px 16px rgba(225,32,32,0.45)" }}>
             <Plus size={20} strokeWidth={3} />
           </button>
         </div>
       </div>
+
+      {/* ── Notifications panel ── */}
+      {showNotifs && (
+        <div style={{ margin: "0 16px 14px", background: C.surf, borderRadius: 18, border: `1px solid ${C.div}`, overflow: "hidden" }}>
+          <div style={{ padding: "14px 18px 10px", borderBottom: `1px solid ${C.div}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>Your Pending Payments</div>
+            <div style={{ fontFamily: F.mono, fontSize: 12, color: C.accent }}>{myPendingCount} item{myPendingCount !== 1 ? "s" : ""}</div>
+          </div>
+          {myPendingCount === 0 ? (
+            <div style={{ padding: "24px 18px", textAlign: "center" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🎉</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>All settled!</div>
+              <div style={{ fontSize: 12, color: C.sub }}>You don't owe anyone right now.</div>
+            </div>
+          ) : (
+            <div>
+              {myPendingMatches.map(m => {
+                const share = m.totalFee / m.players.length;
+                return (
+                  <button key={m.id} onClick={() => { onMatchClick(m.id); setShowNotifs(false); }}
+                    style={{ width: "100%", display: "flex", alignItems: "center", padding: "13px 18px", background: "none", border: "none", borderBottom: `1px solid ${C.div}`, cursor: "pointer", textAlign: "left", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 11, background: C.accentBg, border: `1px solid ${C.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🏏</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>{fmtDate(m.date)} · {m.format}</div>
+                      <div style={{ fontSize: 11, color: C.sub }}>Pay <b style={{ color: C.text }}>{m.payer}</b></div>
+                    </div>
+                    <div style={{ fontFamily: F.mono, fontWeight: 700, fontSize: 15, color: C.accent, flexShrink: 0 }}>{fmtAmt(share)}</div>
+                  </button>
+                );
+              })}
+              {myPendingExpenses.map(e => {
+                const share = e.totalAmount / e.participants.length;
+                return (
+                  <button key={e.id} onClick={() => { onExpenses(); setShowNotifs(false); }}
+                    style={{ width: "100%", display: "flex", alignItems: "center", padding: "13px 18px", background: "none", border: "none", borderBottom: `1px solid ${C.div}`, cursor: "pointer", textAlign: "left", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 11, background: "rgba(250,204,21,0.1)", border: `1px solid ${C.payerBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🍽️</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description}</div>
+                      <div style={{ fontSize: 11, color: C.sub }}>Pay <b style={{ color: C.text }}>{e.payer}</b></div>
+                    </div>
+                    <div style={{ fontFamily: F.mono, fontWeight: 700, fontSize: 15, color: C.payer, flexShrink: 0 }}>{fmtAmt(share)}</div>
+                  </button>
+                );
+              })}
+              <div style={{ padding: "10px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: C.sub }}>Total you owe</div>
+                <div style={{ fontFamily: F.mono, fontWeight: 700, fontSize: 16, color: C.text }}>{fmtAmt(myOwed)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── MAIN ANALYTICS CARD — exact Portfolio Risk Score layout ── */}
       <div style={{ margin: "0 16px 14px", background: C.surf, borderRadius: 22, overflow: "hidden", border: `1px solid ${C.div}` }}>
@@ -309,21 +367,22 @@ function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, o
               Match Fee<br />Tracker
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 11, fontWeight: 400, color: C.sub }}>Updated:</div>
-              <div style={{ fontSize: 11, fontWeight: 400, color: C.sub }}>Just Now</div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: C.sub }}>{total} match{total !== 1 ? "es" : ""}</div>
+              <div style={{ fontFamily: F.mono, fontSize: 13, fontWeight: 600, color: barPct === 1 && total > 0 ? C.paid : C.sub, marginTop: 2 }}>
+                {Math.round(barPct * 100)}% settled {barPct === 1 && total > 0 ? "✓" : ""}
+              </div>
             </div>
           </div>
-          {/* Risk-score style bar with tick marks */}
+          {/* Settlement bar */}
           <div style={{ height: 7, background: "#1e1e1e", borderRadius: 100, position: "relative", overflow: "hidden", marginBottom: 7 }}>
-            {/* Tick marks in unfilled area */}
             {[...Array(22)].map((_, i) => (
               <div key={i} style={{ position: "absolute", left: `${(i + 1) * 4.5}%`, top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.06)", zIndex: 0 }} />
             ))}
-            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${barPct * 100}%`, background: `linear-gradient(90deg, ${C.accent} 0%, #ff5050 100%)`, borderRadius: 100, boxShadow: `0 0 10px rgba(225,32,32,0.5)`, transition: "width .6s ease", zIndex: 1 }} />
+            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${barPct * 100}%`, background: barPct === 1 ? `linear-gradient(90deg, #22c55e, #4ade80)` : `linear-gradient(90deg, ${C.accent} 0%, #ff5050 100%)`, borderRadius: 100, boxShadow: barPct === 1 ? "0 0 10px rgba(34,197,94,0.4)" : `0 0 10px rgba(225,32,32,0.5)`, transition: "width .6s ease, background .4s ease", zIndex: 1 }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: C.sub }}>0% settled</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: C.paid }}>All settled ✓</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: C.sub }}>{pendingMs.length} pending</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: settledMs.length > 0 ? C.paid : C.sub }}>{settledMs.length} settled</span>
           </div>
         </div>
 
@@ -399,7 +458,7 @@ function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, o
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontFamily: F.mono, fontWeight: 600, fontSize: 18, color: C.text }}>{fmtAmt(share)}<span style={{ fontSize: 10, color: C.sub }}>/ea</span></div>
-                      <div style={{ fontSize: 11, fontWeight: 600, marginTop: 3, color: all ? C.paid : C.accent }}>{all ? "✓ Settled" : `${pc}/${np.length} paid`}</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, marginTop: 3, color: all ? C.paid : C.accent }}>{all ? "✓ All settled" : `${pc}/${np.length} paid back`}</div>
                     </div>
                   </div>
                   <div style={{ marginTop: 12, height: 3, background: C.div, borderRadius: 100 }}>
@@ -1315,6 +1374,8 @@ export default function App() {
   const [myId, setMyId] = useState(null);
   const [activeId, setActiveId] = useState(null);
   const [showIdPicker, setShowIdPicker] = useState(false);
+  /* suppresses realtime echoes for 4 s after each local save */
+  const suppressUntil = useRef({});
 
   useEffect(() => {
     (async () => {
@@ -1328,6 +1389,10 @@ export default function App() {
     const ch = supabase.channel("nk-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "mak_data" }, (p) => {
         if (!p.new) return;
+        /* skip events that arrived within 4 s of our own save — prevents stale echoes
+           from overwriting local state after rapid mark/unmark cycles              */
+        const age = Date.now() - (suppressUntil.current[p.new.key] || 0);
+        if (age < 0) return;
         if (p.new.key === SK.matches)  setMatches(p.new.value || []);
         if (p.new.key === SK.roster)   setRoster(p.new.value || DEFAULT_SQUAD);
         if (p.new.key === SK.expenses) setExpenses(p.new.value || []);
@@ -1335,9 +1400,10 @@ export default function App() {
     return () => supabase.removeChannel(ch);
   }, []);
 
-  const saveRoster   = async (r) => { setRoster(r);   await DB.set(SK.roster, r); };
-  const saveMatches  = async (m) => { setMatches(m);  await DB.set(SK.matches, m); };
-  const saveExpenses = async (e) => { setExpenses(e); await DB.set(SK.expenses, e); };
+  const suppress = (key) => { suppressUntil.current[key] = Date.now() + 4000; };
+  const saveRoster   = async (r) => { suppress(SK.roster);   setRoster(r);   await DB.set(SK.roster, r); };
+  const saveMatches  = async (m) => { suppress(SK.matches);  setMatches(m);  await DB.set(SK.matches, m); };
+  const saveExpenses = async (e) => { suppress(SK.expenses); setExpenses(e); await DB.set(SK.expenses, e); };
   const saveIdentity = (n) => { identity.set(n); setMyId(n); setShowIdPicker(false); };
 
   const handleMarkPaid = async (matchId) => {
