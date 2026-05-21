@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import {
   Plus, ChevronLeft, Check, Trash2, UserPlus,
   Search, X, Copy, CheckCheck,
-  Bell, Clock, Users, Home, BarChart2, ArrowUpRight,
+  Bell, Users, Home, BarChart2, ArrowUpRight,
+  Receipt, Lock,
 } from "lucide-react";
 import { supabase } from "./supabase";
 
@@ -37,7 +38,7 @@ const identity = {
   get: () => { try { return localStorage.getItem("nk-identity"); } catch { return null; } },
   set: (n) => { try { localStorage.setItem("nk-identity", n); } catch {} },
 };
-const SK = { roster: "nk-roster-v1", matches: "nk-matches-v1" };
+const SK = { roster: "nk-roster-v1", matches: "nk-matches-v1", expenses: "nk-expenses-v1" };
 const DEFAULT_SQUAD = ["Praveen","Mahesh S","Karthik","Raghu","Chandu","Harsha","Anand","Mahesh P","Anand P","Chetan","Shrishail","Balaji"];
 
 /* ─── Helpers ─────────────────────────────────────────────── */
@@ -107,12 +108,12 @@ function IconBtn({ children, badge, onClick }) {
 }
 
 /* ─── Bottom nav — pill, 4 tabs ───────────────────────────── */
-function BottomNav({ active, onHome, onMatches, onHistory, onSquad }) {
+function BottomNav({ active, onHome, onMatches, onExpenses, onSquad }) {
   const tabs = [
-    { id: "home",    icon: Home,     label: "Home",    fn: onHome },
-    { id: "matches", icon: BarChart2, label: "Matches", fn: onMatches },
-    { id: "history", icon: Clock,    label: "History", fn: onHistory },
-    { id: "squad",   icon: Users,    label: "Squad",   fn: onSquad },
+    { id: "home",     icon: Home,     label: "Home",     fn: onHome },
+    { id: "matches",  icon: BarChart2, label: "Matches",  fn: onMatches },
+    { id: "expenses", icon: Receipt,  label: "Expenses", fn: onExpenses },
+    { id: "squad",    icon: Users,    label: "Squad",    fn: onSquad },
   ];
   return (
     <div style={{ position: "fixed", bottom: 18, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 36px)", maxWidth: 420, background: C.surf, borderRadius: 100, border: `1px solid ${C.div}`, display: "flex", padding: 5, boxShadow: "0 24px 64px rgba(0,0,0,0.85)", zIndex: 20 }}>
@@ -248,7 +249,7 @@ function PlayerChip({ name, selected, isPayer, onTap, disabled }) {
 }
 
 /* ─── HOME SCREEN — Portfolio Risk Score layout ────────────── */
-function HomeScreen({ matches, myId, onMatchClick, onNew, onMatches, onHistory, onSquad, onChangeId, onMarkPaid }) {
+function HomeScreen({ matches, myId, onMatchClick, onNew, onMatches, onExpenses, onSquad, onChangeId, onMarkPaid }) {
   const total = matches.length;
   const pendingMs = matches.filter(m => m.players.filter(p => p !== m.payer).some(p => !m.payments[p]));
   const settledMs = matches.filter(m => m.players.filter(p => p !== m.payer).every(p => m.payments[p]));
@@ -403,13 +404,13 @@ function HomeScreen({ matches, myId, onMatchClick, onNew, onMatches, onHistory, 
         </div>
       )}
 
-      <BottomNav active="home" onHome={() => {}} onMatches={onMatches} onHistory={onHistory} onSquad={onSquad} />
+      <BottomNav active="home" onHome={() => {}} onMatches={onMatches} onExpenses={onExpenses} onSquad={onSquad} />
     </div>
   );
 }
 
 /* ─── MATCHES SCREEN — full list with filters ─────────────── */
-function MatchesScreen({ matches, myId, onMatchClick, onNew, onHome, onHistory, onSquad, onMarkPaid }) {
+function MatchesScreen({ matches, myId, onMatchClick, onNew, onHome, onExpenses, onSquad, onMarkPaid }) {
   const [filter, setFilter] = useState("all");
   const filtered = matches.filter(m => {
     const np = m.players.filter(p => p !== m.payer);
@@ -486,89 +487,12 @@ function MatchesScreen({ matches, myId, onMatchClick, onNew, onHome, onHistory, 
           );
         })}
       </div>
-      <BottomNav active="matches" onHome={onHome} onMatches={() => {}} onHistory={onHistory} onSquad={onSquad} />
+      <BottomNav active="matches" onHome={onHome} onMatches={() => {}} onExpenses={onExpenses} onSquad={onSquad} />
     </div>
   );
 }
 
 /* ─── HISTORY SCREEN — 2-col transaction-card grid (ref img 2) */
-function HistoryScreen({ matches, myId, onMatchClick, onHome, onMatches, onSquad }) {
-  const [search, setSearch] = useState("");
-  const settled = matches
-    .filter(m => m.players.filter(p => p !== m.payer).every(p => m.payments[p]))
-    .filter(m => !search || fmtDate(m.date).toLowerCase().includes(search.toLowerCase()) || m.payer.toLowerCase().includes(search.toLowerCase()) || m.format.toLowerCase().includes(search.toLowerCase()));
-
-  const sparkH = [4, 7, 3, 8, 5, 9, 6, 4, 8, 5];
-
-  return (
-    <div style={{ paddingBottom: 90, background: C.bg, minHeight: "100vh" }}>
-      {/* Header — matches reference "Transactions History" layout */}
-      <div style={{ padding: "20px 20px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ fontSize: 28, fontWeight: 300, color: C.text, lineHeight: 1.15, letterSpacing: -0.5 }}>
-          Match<br /><span style={{ fontWeight: 800 }}>History</span>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <IconBtn><Search size={17} color={C.sub} /></IconBtn>
-          <IconBtn><Bell size={17} color={C.sub} /></IconBtn>
-        </div>
-      </div>
-
-      <div style={{ padding: "0 16px 14px" }}>
-        <div style={{ position: "relative" }}>
-          <Search size={14} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: C.muted2, pointerEvents: "none" }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by date, payer, format…" style={{ ...iStyle({ paddingLeft: 42, fontSize: 13, padding: "11px 14px 11px 42px" }) }} />
-        </div>
-      </div>
-
-      {settled.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ fontSize: 44, marginBottom: 14 }}>📋</div>
-          <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>No settled matches yet</div>
-          <div style={{ fontSize: 13, fontWeight: 400, color: C.sub }}>Once a match is fully settled, it appears here</div>
-        </div>
-      ) : (
-        <div style={{ padding: "0 16px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>{settled.length} settled match{settled.length > 1 ? "es" : ""}</div>
-          {/* 2-column transaction-card grid exactly like reference */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {settled.map(m => {
-              const share = m.totalFee / m.players.length;
-              const iWasPayer = m.payer === myId;
-              return (
-                <div key={m.id} onClick={() => onMatchClick(m.id)}
-                  style={{ background: C.card, borderRadius: 18, padding: "14px", border: `1px solid ${C.border}`, cursor: "pointer", display: "flex", flexDirection: "column" }}>
-                  {/* Icon + sparkline row (matches reference card layout) */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 12, background: C.paidBg, border: `1px solid ${C.paidBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏏</div>
-                    {/* Mini bar sparkline — like reference cards */}
-                    <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 22 }}>
-                      {sparkH.map((h, i) => (
-                        <div key={i} style={{ width: 2.5, height: `${h * 2.5}px`, background: C.paid, borderRadius: 2, opacity: 0.4 + i * 0.06 }} />
-                      ))}
-                    </div>
-                  </div>
-                  {/* Date + format */}
-                  <div style={{ fontSize: 10, fontWeight: 500, color: C.sub, marginBottom: 1 }}>{fmtDate(m.date)}</div>
-                  <div style={{ fontFamily: F.mono, fontSize: 10, color: C.muted2, marginBottom: 8 }}>{m.format} · {m.players.length}p</div>
-                  {/* Amount */}
-                  <div style={{ fontFamily: F.mono, fontWeight: 600, fontSize: 20, color: C.text, marginBottom: 2, letterSpacing: -0.5 }}>{fmtAmt(share)}</div>
-                  <div style={{ fontSize: 10, fontWeight: 500, color: C.sub, marginBottom: 10 }}>per person</div>
-                  {/* Status chip — matches reference */}
-                  <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.paid }} />
-                    <span style={{ fontSize: 10, fontWeight: 600, color: C.paid }}>Settled</span>
-                    {iWasPayer && <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, color: C.payer, background: C.payerBg, padding: "2px 7px", borderRadius: 5 }}>you paid</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      <BottomNav active="history" onHome={onHome} onMatches={onMatches} onHistory={() => {}} onSquad={onSquad} />
-    </div>
-  );
-}
 
 /* ─── NEW MATCH — fully inline, no modal, no dropdowns ───── */
 function NewMatchScreen({ roster, matches, onSave, onBack }) {
@@ -784,7 +708,9 @@ function NewMatchScreen({ roster, matches, onSave, onBack }) {
 }
 
 /* ─── DETAIL SCREEN ───────────────────────────────────────── */
-function PlayerRow({ name, amount, paid, isPayer, isMe, onToggle }) {
+
+/* Shared player row used by both match and expense detail */
+function PlayerRow({ name, amount, paid, isPayer, isMe, onToggle, locked }) {
   const bc = isPayer ? C.payerBorder : isMe ? C.youBorder : paid ? C.paidBorder : C.border;
   const ac = isPayer ? C.payer : isMe ? C.you : paid ? C.paid : C.unpaid;
   const ab = isPayer ? C.payerBg : isMe ? C.youBg : paid ? C.paidBg : C.unpaidBg;
@@ -796,10 +722,12 @@ function PlayerRow({ name, amount, paid, isPayer, isMe, onToggle }) {
           {name}{isMe && <span style={{ fontSize: 9, fontWeight: 700, color: C.you, background: C.youBg, border: `1px solid ${C.youBorder}`, padding: "1px 6px", borderRadius: 5 }}>YOU</span>}
         </div>
         {isPayer && <div style={{ fontSize: 11, fontWeight: 500, color: C.payer }}>Paid upfront 💰</div>}
+        {locked && !isPayer && <div style={{ fontSize: 10, fontWeight: 500, color: C.muted2 }}>Only payer can mark</div>}
       </div>
       <div style={{ fontFamily: F.mono, fontSize: 13, color: C.sub, marginRight: 10, flexShrink: 0 }}>{fmtAmt(amount)}</div>
-      <div onClick={onToggle || undefined} style={{ width: 36, height: 36, borderRadius: 10, background: isPayer ? C.payerBg : paid ? C.paid : C.border, color: isPayer ? C.payer : paid ? "#fff" : C.muted2, display: "flex", alignItems: "center", justifyContent: "center", cursor: onToggle ? "pointer" : "default", flexShrink: 0, transition: "all .2s", border: isPayer ? `1px solid ${C.payerBorder}` : "none" }}>
-        <Check size={16} strokeWidth={paid || isPayer ? 3 : 2} />
+      <div onClick={(!locked && onToggle) ? onToggle : undefined}
+        style={{ width: 36, height: 36, borderRadius: 10, background: isPayer ? C.payerBg : paid ? C.paid : C.border, color: isPayer ? C.payer : paid ? "#fff" : C.muted2, display: "flex", alignItems: "center", justifyContent: "center", cursor: (!locked && onToggle) ? "pointer" : "default", flexShrink: 0, transition: "all .2s", border: isPayer ? `1px solid ${C.payerBorder}` : "none", opacity: locked ? 0.38 : 1 }}>
+        {locked && !isPayer ? <Lock size={13} /> : <Check size={16} strokeWidth={paid || isPayer ? 3 : 2} />}
       </div>
     </div>
   );
@@ -814,6 +742,11 @@ function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
   const stillOwed = (nonPayers.length - paidCount) * share;
   const iAmIn = myId && match.players.includes(myId) && myId !== match.payer;
   const iHavePaid = iAmIn && match.payments[myId];
+  const iAmPayer = myId === match.payer;
+
+  /* auth: payer can mark anyone; everyone can mark themselves */
+  const canMark = (name) => iAmPayer || myId === name;
+
   const toggle = async (n) => { await onUpdate({ ...match, payments: { ...match.payments, [n]: !match.payments[n] } }); };
   const markAll = async () => { const p = { ...match.payments }; nonPayers.forEach(n => { p[n] = true; }); await onUpdate({ ...match, payments: p }); };
   const copy = () => { navigator.clipboard?.writeText(generateSummary(match)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
@@ -829,6 +762,7 @@ function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
         </div>
       } />
 
+      {/* My status banner */}
       {iAmIn && (
         <div style={{ margin: "14px 20px 0", padding: "14px 16px", background: iHavePaid ? C.paidBg : C.accentBg, border: `1px solid ${iHavePaid ? C.paidBorder : C.accentBorder}`, borderRadius: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
@@ -871,19 +805,27 @@ function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
       </div>
 
       <div style={{ padding: "0 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>Players · {match.players.length}</div>
-          {!allPaid && <button onClick={markAll} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 9, color: C.sub, fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><CheckCheck size={13} /> Mark all</button>}
+          {iAmPayer && !allPaid && <button onClick={markAll} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 9, color: C.sub, fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><CheckCheck size={13} /> Mark all</button>}
         </div>
-        <PlayerRow name={match.payer} amount={share} paid isPayer isMe={myId === match.payer} onToggle={null} />
-        {nonPayers.map(n => <PlayerRow key={n} name={n} amount={share} paid={!!match.payments[n]} isPayer={false} isMe={myId === n} onToggle={() => toggle(n)} />)}
+        {!iAmPayer && !allPaid && (
+          <div style={{ fontSize: 11, fontWeight: 500, color: C.muted2, marginBottom: 10, padding: "7px 12px", background: C.card, borderRadius: 9, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}>
+            <Lock size={11} /> Only <b style={{ color: C.text }}>{match.payer}</b> (payer) can mark others. You can only mark yourself.
+          </div>
+        )}
+        <PlayerRow name={match.payer} amount={share} paid isPayer isMe={iAmPayer} onToggle={null} locked={false} />
+        {nonPayers.map(n => (
+          <PlayerRow key={n} name={n} amount={share} paid={!!match.payments[n]} isPayer={false} isMe={myId === n}
+            onToggle={canMark(n) ? () => toggle(n) : null} locked={!canMark(n)} />
+        ))}
       </div>
     </div>
   );
 }
 
 /* ─── SQUAD SCREEN ────────────────────────────────────────── */
-function SquadScreen({ roster, onUpdate, onHome, onMatches, onHistory, myId }) {
+function SquadScreen({ roster, onUpdate, onHome, onMatches, onExpenses, myId }) {
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [squadSearch, setSquadSearch] = useState("");
@@ -997,7 +939,325 @@ function SquadScreen({ roster, onUpdate, onHome, onMatches, onHistory, myId }) {
           })
         )}
       </div>
-      <BottomNav active="squad" onHome={onHome} onMatches={onMatches} onHistory={onHistory} onSquad={() => {}} />
+      <BottomNav active="squad" onHome={onHome} onMatches={onMatches} onExpenses={onExpenses} onSquad={() => {}} />
+    </div>
+  );
+}
+
+/* ─── EXPENSE HELPERS ─────────────────────────────────────── */
+function generateExpenseSummary(exp) {
+  const share = exp.totalAmount / exp.participants.length;
+  const nonPayers = exp.participants.filter(p => p !== exp.payer);
+  const paidCount = nonPayers.filter(p => exp.payments[p]).length;
+  return [
+    `🍽️ NK Brigade — ${exp.description}`,
+    `Date: ${fmtDate(exp.date)}`,
+    `Amount: ${fmtAmt(exp.totalAmount)} ÷ ${exp.participants.length} = ${fmtAmt(share)}/person`,
+    `Paid by: ${exp.payer} 💰`, ``,
+    `${exp.payer} ✅`,
+    ...nonPayers.map(p => `${p} ${exp.payments[p] ? "✅" : "❌"}`),
+    ``, `${paidCount}/${nonPayers.length} settled`,
+  ].join("\n");
+}
+
+/* ─── EXPENSE CARD ────────────────────────────────────────── */
+function ExpenseCard({ expense: exp, myId, onClick, onMarkPaid }) {
+  const nonPayers = exp.participants.filter(p => p !== exp.payer);
+  const paidCount = nonPayers.filter(p => exp.payments[p]).length;
+  const allPaid = paidCount === nonPayers.length;
+  const share = exp.totalAmount / exp.participants.length;
+  const pct = nonPayers.length ? (paidCount / nonPayers.length) * 100 : 100;
+  const iOwe = myId && exp.payer !== myId && exp.participants.includes(myId) && !exp.payments[myId];
+  return (
+    <div style={{ background: C.card, border: `1px solid ${iOwe ? C.accentBorder : allPaid ? C.paidBorder : C.border}`, borderRadius: 18, marginBottom: 10, overflow: "hidden" }}>
+      <div onClick={onClick} style={{ padding: "15px 16px 13px", cursor: "pointer" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 14, background: allPaid ? C.paidBg : "rgba(250,204,21,0.08)", border: `1px solid ${allPaid ? C.paidBorder : C.payerBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🍽️</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{exp.description}</div>
+              <div style={{ fontSize: 11, color: C.sub }}>💰 {exp.payer} · {fmtDate(exp.date)} · {exp.participants.length}p</div>
+            </div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+            <div style={{ fontFamily: F.mono, fontWeight: 600, fontSize: 18, color: C.text }}>{fmtAmt(share)}<span style={{ fontSize: 10, color: C.sub }}>/ea</span></div>
+            <div style={{ fontSize: 11, fontWeight: 600, marginTop: 3, color: allPaid ? C.paid : C.unpaid }}>{allPaid ? "✓ Settled" : `${paidCount}/${nonPayers.length} paid`}</div>
+          </div>
+        </div>
+        <div style={{ height: 3, background: C.div, borderRadius: 100 }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: allPaid ? C.paid : C.payer, borderRadius: 100, transition: "width .3s" }} />
+        </div>
+      </div>
+      {iOwe && (
+        <div style={{ padding: "10px 16px", borderTop: `1px solid ${C.accentBorder}`, background: C.accentBg, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: C.sub }}>You owe <span style={{ color: "#fff", fontWeight: 700 }}>{fmtAmt(share)}</span> → {exp.payer}</div>
+          <button onClick={e => { e.stopPropagation(); onMarkPaid(exp.id); }}
+            style={{ background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, fontSize: 12, padding: "7px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+            <Check size={12} /> Mark Paid
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── ADD EXPENSE SCREEN ──────────────────────────────────── */
+function AddExpenseScreen({ roster, onSave, onBack }) {
+  const today = new Date().toISOString().split("T")[0];
+  const [form, setForm] = useState({ description: "", date: today, totalAmount: "", payer: "", participants: [] });
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const visible = roster.filter(n => n.toLowerCase().includes(playerSearch.toLowerCase()));
+  const toggleP = (name) => setForm(f => {
+    if (f.payer === name) return f;
+    const participants = f.participants.includes(name) ? f.participants.filter(p => p !== name) : [...f.participants, name];
+    return { ...f, participants };
+  });
+  const setPayer = (name) => setForm(f => ({ ...f, payer: name, participants: f.participants.includes(name) ? f.participants : [...f.participants, name] }));
+
+  const amount = parseFloat(form.totalAmount) || 0;
+  const share = form.participants.length > 0 && amount > 0 ? amount / form.participants.length : 0;
+  const step1Done = !!form.description.trim() && !!form.date && amount > 0;
+  const step2Done = form.participants.length >= 2;
+  const step3Done = !!form.payer && form.participants.includes(form.payer);
+  const canSave = step1Done && step2Done && step3Done;
+
+  const qBtn = (active) => ({ padding: "7px 14px", borderRadius: 100, border: `1px solid ${active ? C.accentBorder : C.border}`, background: active ? C.accentBg : C.card, color: active ? C.accent : C.sub, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 });
+
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    const payments = {};
+    form.participants.forEach(p => { payments[p] = (p === form.payer); });
+    await onSave({ id: uid(), description: form.description.trim(), date: form.date, totalAmount: amount, payer: form.payer, participants: form.participants, payments, createdAt: Date.now() });
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ paddingBottom: 48, background: C.bg, minHeight: "100vh" }}>
+      <Header title="Log Expense" subtitle="Lunch, snacks, transport — split anything" onBack={onBack} />
+      <div style={{ padding: "20px 20px 0" }}>
+
+        <StepLabel n="1" title="What was it?" done={step1Done} count={step1Done ? fmtAmt(amount) : null} />
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={lbl}>Description</label>
+          <input value={form.description} onChange={e => set("description", e.target.value)}
+            placeholder="e.g. Team lunch at Hotel Udupi, Post-match snacks…"
+            style={iStyle()} autoFocus />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div><label style={lbl}>Date</label><input type="date" value={form.date} onChange={e => set("date", e.target.value)} style={iStyle()} /></div>
+          <div>
+            <label style={lbl}>Total Amount</label>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontFamily: F.mono, fontWeight: 600, fontSize: 18, color: amount > 0 ? C.sub : C.muted2, pointerEvents: "none" }}>₹</span>
+              <input type="number" inputMode="numeric" value={form.totalAmount} onChange={e => set("totalAmount", e.target.value)} placeholder="0" style={iStyle({ paddingLeft: 30, fontFamily: F.mono, fontWeight: 600, fontSize: 18 })} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: C.div, marginBottom: 20 }} />
+        <StepLabel n="2" title="Who came?" hint="Tap to add/remove · Only participants split the cost" done={step2Done} count={form.participants.length > 0 ? `${form.participants.length}/${roster.length}` : null} />
+
+        <div style={{ display: "flex", gap: 7, marginBottom: 12, overflowX: "auto" }}>
+          <button style={qBtn(form.participants.length === roster.length)} onClick={() => set("participants", [...roster])}>All {roster.length}</button>
+          <button style={qBtn(false)} onClick={() => setForm(f => ({ ...f, participants: f.payer ? [f.payer] : [] }))}>Clear</button>
+        </div>
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <Search size={14} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: C.muted2, pointerEvents: "none" }} />
+          <input value={playerSearch} onChange={e => setPlayerSearch(e.target.value)} placeholder="Search players…" style={iStyle({ paddingLeft: 40, fontSize: 14, padding: "10px 14px 10px 40px" })} />
+          {playerSearch && <button onClick={() => setPlayerSearch("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: C.muted, border: "none", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: C.sub }}><X size={11} /></button>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
+          {visible.map(name => (
+            <PlayerChip key={name} name={name} selected={form.participants.includes(name)} isPayer={form.payer === name} onTap={() => toggleP(name)} />
+          ))}
+        </div>
+
+        {share > 0 && (
+          <div style={{ background: "rgba(250,204,21,0.08)", border: `1px solid ${C.payerBorder}`, borderRadius: 16, padding: "14px 18px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Each person pays</div>
+              <div style={{ fontFamily: F.mono, fontWeight: 600, color: C.payer, fontSize: 28, letterSpacing: -1 }}>{fmtAmt(share)}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Splitting</div>
+              <div style={{ fontFamily: F.mono, fontSize: 28, color: C.text, fontWeight: 600 }}>{form.participants.length}<span style={{ fontSize: 14, color: C.sub }}> people</span></div>
+            </div>
+          </div>
+        )}
+
+        {step2Done && (
+          <>
+            <div style={{ height: 1, background: C.div, marginBottom: 20 }} />
+            <StepLabel n="3" title="Who paid the bill?" hint="They'll be auto-marked settled. Others owe them their share." done={step3Done} />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 28 }}>
+              {form.participants.map(name => (
+                <button key={name} onClick={() => setPayer(name)}
+                  style={{ padding: "10px 16px", borderRadius: 12, border: `2px solid ${form.payer === name ? C.payerBorder : C.border}`, background: form.payer === name ? C.payerBg : C.card, color: form.payer === name ? C.payer : C.sub, fontWeight: form.payer === name ? 800 : 500, fontSize: 14, cursor: "pointer", transition: "all .14s", display: "flex", alignItems: "center", gap: 6 }}>
+                  {form.payer === name && "💰 "}{name}
+                </button>
+              ))}
+            </div>
+            <button onClick={handleSave} disabled={!canSave || saving}
+              style={{ width: "100%", padding: "17px", background: canSave ? C.accent : C.muted, color: canSave ? "#fff" : C.muted2, border: "none", borderRadius: 16, fontWeight: 800, fontSize: 16, cursor: canSave ? "pointer" : "not-allowed", transition: "all .2s", boxShadow: canSave ? "0 10px 28px rgba(225,32,32,0.4)" : "none" }}>
+              {saving ? "Saving…" : canSave ? `Log Expense · ${form.participants.length} people · ${fmtAmt(share)} each` : "Select who paid ↑"}
+            </button>
+          </>
+        )}
+        {!step2Done && step1Done && (
+          <div style={{ textAlign: "center", padding: "6px 0", fontSize: 12, fontWeight: 500, color: C.sub }}>↑ Tap players who came</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── EXPENSE DETAIL SCREEN ───────────────────────────────── */
+function ExpenseDetailScreen({ expense: exp, myId, onUpdate, onDelete, onBack }) {
+  const [copied, setCopied] = useState(false);
+  const share = exp.totalAmount / exp.participants.length;
+  const nonPayers = exp.participants.filter(p => p !== exp.payer);
+  const paidCount = nonPayers.filter(p => exp.payments[p]).length;
+  const allPaid = paidCount === nonPayers.length;
+  const stillOwed = (nonPayers.length - paidCount) * share;
+  const iAmIn = myId && exp.participants.includes(myId) && myId !== exp.payer;
+  const iHavePaid = iAmIn && exp.payments[myId];
+  const iAmPayer = myId === exp.payer;
+  const canMark = (name) => iAmPayer || myId === name;
+  const toggle = async (n) => { await onUpdate({ ...exp, payments: { ...exp.payments, [n]: !exp.payments[n] } }); };
+  const markAll = async () => { const p = { ...exp.payments }; nonPayers.forEach(n => { p[n] = true; }); await onUpdate({ ...exp, payments: p }); };
+  const copy = () => { navigator.clipboard?.writeText(generateExpenseSummary(exp)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
+
+  return (
+    <div style={{ paddingBottom: 40, background: C.bg, minHeight: "100vh" }}>
+      <Header title="Expense Detail" subtitle={exp.description} onBack={onBack} right={
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={copy} style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 10, color: copied ? C.paid : C.accent, cursor: "pointer", padding: "7px 13px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+            {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Share</>}
+          </button>
+          <button onClick={onDelete} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.sub, cursor: "pointer", padding: "7px 10px", display: "flex" }}><Trash2 size={15} /></button>
+        </div>
+      } />
+
+      {iAmIn && (
+        <div style={{ margin: "14px 20px 0", padding: "14px 16px", background: iHavePaid ? C.paidBg : C.accentBg, border: `1px solid ${iHavePaid ? C.paidBorder : C.accentBorder}`, borderRadius: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: iHavePaid ? C.paid : C.accent }}>{iHavePaid ? "✓ You're settled!" : "You haven't paid yet"}</div>
+            <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{iHavePaid ? `Paid ${fmtAmt(share)} to ${exp.payer}` : `Owe ${fmtAmt(share)} to ${exp.payer}`}</div>
+          </div>
+          {!iHavePaid && <button onClick={() => toggle(myId)} style={{ background: C.accent, border: "none", borderRadius: 12, color: "#fff", fontWeight: 800, fontSize: 13, padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, boxShadow: "0 4px 14px rgba(225,32,32,0.38)" }}><Check size={14} /> Mark Paid</button>}
+        </div>
+      )}
+
+      <div style={{ margin: "12px 20px 0", background: C.card, borderRadius: 18, padding: "16px", border: `1px solid ${C.border}` }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {[{ l: "Date", v: fmtDate(exp.date) }, { l: "Paid by", v: exp.payer }, { l: "Total Bill", v: fmtAmt(exp.totalAmount) }, { l: "Per Person", v: fmtAmt(share) }].map(f => (
+            <div key={f.l}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{f.l}</div>
+              <div style={{ fontFamily: F.mono, fontSize: 16, fontWeight: 600, color: C.text }}>{f.v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ margin: "10px 20px", padding: "16px", background: allPaid ? C.paidBg : C.accentBg, borderRadius: 16, border: `1px solid ${allPaid ? C.paidBorder : C.accentBorder}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 11, color: C.sub }}>{allPaid ? "Fully settled!" : "Still outstanding"}</div>
+            <div style={{ fontFamily: F.mono, fontWeight: 600, fontSize: 28, color: allPaid ? C.paid : C.accent, letterSpacing: -1 }}>{allPaid ? "✓ Done" : fmtAmt(stillOwed)}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, color: C.sub }}>Settled</div>
+            <div style={{ fontFamily: F.mono, fontSize: 28, color: C.text, fontWeight: 600, letterSpacing: -1 }}>{paidCount}<span style={{ color: C.sub, fontSize: 18 }}>/{nonPayers.length}</span></div>
+          </div>
+        </div>
+        <div style={{ marginTop: 12, height: 5, background: "rgba(0,0,0,0.3)", borderRadius: 100 }}>
+          <div style={{ height: "100%", background: allPaid ? C.paid : C.payer, borderRadius: 100, width: `${nonPayers.length ? (paidCount / nonPayers.length) * 100 : 100}%`, transition: "width .3s" }} />
+        </div>
+      </div>
+
+      <div style={{ padding: "0 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>Participants · {exp.participants.length}</div>
+          {iAmPayer && !allPaid && <button onClick={markAll} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 9, color: C.sub, fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><CheckCheck size={13} /> Mark all</button>}
+        </div>
+        {!iAmPayer && !allPaid && (
+          <div style={{ fontSize: 11, fontWeight: 500, color: C.muted2, marginBottom: 10, padding: "7px 12px", background: C.card, borderRadius: 9, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 6 }}>
+            <Lock size={11} /> Only <b style={{ color: C.text }}>{exp.payer}</b> can mark others. You can mark yourself.
+          </div>
+        )}
+        <PlayerRow name={exp.payer} amount={share} paid isPayer isMe={iAmPayer} onToggle={null} locked={false} />
+        {nonPayers.map(n => (
+          <PlayerRow key={n} name={n} amount={share} paid={!!exp.payments[n]} isPayer={false} isMe={myId === n}
+            onToggle={canMark(n) ? () => toggle(n) : null} locked={!canMark(n)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── EXPENSES SCREEN ─────────────────────────────────────── */
+function ExpensesScreen({ expenses, myId, onExpenseClick, onNew, onHome, onMatches, onExpenses, onSquad }) {
+  const myPending = expenses.filter(e => myId && e.payer !== myId && e.participants.includes(myId) && !e.payments[myId]);
+  const myOwed = myPending.reduce((s, e) => s + e.totalAmount / e.participants.length, 0);
+  const totalSpend = expenses.reduce((s, e) => s + e.totalAmount, 0);
+
+  return (
+    <div style={{ paddingBottom: 90, background: C.bg, minHeight: "100vh" }}>
+      <div style={{ padding: "20px 20px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ fontSize: 28, fontWeight: 300, color: C.text, lineHeight: 1.15, letterSpacing: -0.5 }}>
+          Group<br /><span style={{ fontWeight: 800 }}>Expenses</span>
+        </div>
+        <button onClick={onNew} style={{ width: 40, height: 40, borderRadius: 13, background: C.accent, border: "none", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 4px 16px rgba(225,32,32,0.45)" }}>
+          <Plus size={20} strokeWidth={3} />
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ padding: "0 16px", marginBottom: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+          <div style={{ background: C.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>Total Expenses</div>
+            <div style={{ fontFamily: F.mono, fontWeight: 600, fontSize: 20, color: C.text }}>{fmtAmt(totalSpend)}</div>
+            <div style={{ fontSize: 10, fontWeight: 500, color: C.sub, marginTop: 2 }}>{expenses.length} event{expenses.length !== 1 ? "s" : ""}</div>
+          </div>
+          <div style={{ background: myOwed > 0 ? C.accentBg : C.card, borderRadius: 14, padding: "14px 16px", border: `1px solid ${myOwed > 0 ? C.accentBorder : C.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>You Owe</div>
+            <div style={{ fontFamily: F.mono, fontWeight: 600, fontSize: 20, color: myOwed > 0 ? C.accent : C.paid }}>{fmtAmt(myOwed)}</div>
+            <div style={{ fontSize: 10, fontWeight: 500, color: C.sub, marginTop: 2 }}>{myPending.length > 0 ? `${myPending.length} unsettled` : "All clear ✓"}</div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <button onClick={onNew} style={{ width: "100%", padding: "14px 18px", background: "rgba(250,204,21,0.08)", borderRadius: 16, color: C.payer, border: `1px solid ${C.payerBorder}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, textAlign: "left" }}>
+          <div style={{ width: 38, height: 38, borderRadius: 12, background: C.payerBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🍽️</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>Log a Group Expense</div>
+            <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.8, marginTop: 1 }}>Lunch, snacks, transport — split anything</div>
+          </div>
+          <ArrowUpRight size={16} style={{ opacity: 0.6 }} />
+        </button>
+      </div>
+
+      <div style={{ padding: "0 16px" }}>
+        {expenses.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "50px 0" }}>
+            <div style={{ fontSize: 48, marginBottom: 14 }}>🍽️</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 6 }}>No expenses yet</div>
+            <div style={{ fontSize: 13, fontWeight: 400, color: C.sub, lineHeight: 1.6 }}>After a match, go for lunch?<br />Log it here and split the bill automatically.</div>
+          </div>
+        ) : (
+          expenses.map(e => (
+            <ExpenseCard key={e.id} expense={e} myId={myId} onClick={() => onExpenseClick(e.id)} onMarkPaid={() => {}} />
+          ))
+        )}
+      </div>
+
+      <BottomNav active="expenses" onHome={onHome} onMatches={onMatches} onExpenses={onExpenses} onSquad={onSquad} />
     </div>
   );
 }
@@ -1008,37 +1268,48 @@ export default function App() {
   const [screen, setScreen] = useState("home");
   const [roster, setRoster] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [myId, setMyId] = useState(null);
   const [activeId, setActiveId] = useState(null);
   const [showIdPicker, setShowIdPicker] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const r = await DB.get(SK.roster);
-      const m = await DB.get(SK.matches);
+      const [r, m, e] = await Promise.all([DB.get(SK.roster), DB.get(SK.matches), DB.get(SK.expenses)]);
       setRoster(r || DEFAULT_SQUAD);
       setMatches(m || []);
+      setExpenses(e || []);
       setMyId(identity.get());
       setReady(true);
     })();
     const ch = supabase.channel("nk-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "mak_data" }, (p) => {
         if (!p.new) return;
-        if (p.new.key === SK.matches) setMatches(p.new.value || []);
-        if (p.new.key === SK.roster) setRoster(p.new.value || DEFAULT_SQUAD);
+        if (p.new.key === SK.matches)  setMatches(p.new.value || []);
+        if (p.new.key === SK.roster)   setRoster(p.new.value || DEFAULT_SQUAD);
+        if (p.new.key === SK.expenses) setExpenses(p.new.value || []);
       }).subscribe();
     return () => supabase.removeChannel(ch);
   }, []);
 
-  const saveRoster = async (r) => { setRoster(r); await DB.set(SK.roster, r); };
-  const saveMatches = async (m) => { setMatches(m); await DB.set(SK.matches, m); };
+  const saveRoster   = async (r) => { setRoster(r);   await DB.set(SK.roster, r); };
+  const saveMatches  = async (m) => { setMatches(m);  await DB.set(SK.matches, m); };
+  const saveExpenses = async (e) => { setExpenses(e); await DB.set(SK.expenses, e); };
   const saveIdentity = (n) => { identity.set(n); setMyId(n); setShowIdPicker(false); };
+
   const handleMarkPaid = async (matchId) => {
     if (!myId) return;
     const nm = matches.map(m => m.id !== matchId ? m : { ...m, payments: { ...m.payments, [myId]: true } });
     await saveMatches(nm);
   };
-  const activeMatch = matches.find(m => m.id === activeId);
+  const handleMarkExpensePaid = async (expenseId) => {
+    if (!myId) return;
+    const ne = expenses.map(e => e.id !== expenseId ? e : { ...e, payments: { ...e.payments, [myId]: true } });
+    await saveExpenses(ne);
+  };
+
+  const activeMatch   = matches.find(m => m.id === activeId);
+  const activeExpense = expenses.find(e => e.id === activeId);
 
   if (!ready) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: F.sans }}>
@@ -1056,16 +1327,47 @@ export default function App() {
     </div>
   );
 
-  const nav = { onHome: () => setScreen("home"), onMatches: () => setScreen("matches"), onHistory: () => setScreen("history"), onSquad: () => setScreen("squad") };
+  const nav = {
+    onHome:     () => setScreen("home"),
+    onMatches:  () => setScreen("matches"),
+    onExpenses: () => setScreen("expenses"),
+    onSquad:    () => setScreen("squad"),
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, maxWidth: 480, margin: "0 auto", fontFamily: F.sans }}>
       <Fonts />
+
+      {/* ── Matches ── */}
       {screen === "home" && <HomeScreen matches={matches} myId={myId} onMatchClick={id => { setActiveId(id); setScreen("detail"); }} onNew={() => setScreen("new")} {...nav} onChangeId={() => setShowIdPicker(true)} onMarkPaid={handleMarkPaid} />}
       {screen === "matches" && <MatchesScreen matches={matches} myId={myId} onMatchClick={id => { setActiveId(id); setScreen("detail"); }} onNew={() => setScreen("new")} {...nav} onMarkPaid={handleMarkPaid} />}
-      {screen === "history" && <HistoryScreen matches={matches} myId={myId} onMatchClick={id => { setActiveId(id); setScreen("detail"); }} {...nav} />}
       {screen === "new" && <NewMatchScreen roster={roster} matches={matches} onSave={async m => { await saveMatches([m, ...matches]); setScreen("home"); }} onBack={() => setScreen("home")} />}
-      {screen === "detail" && activeMatch && <DetailScreen match={activeMatch} myId={myId} onUpdate={async u => { const nm = matches.map(m => m.id === u.id ? u : m); await saveMatches(nm); }} onDelete={async () => { await saveMatches(matches.filter(m => m.id !== activeId)); setScreen("home"); }} onBack={() => setScreen(matches.find(m => m.id === activeId) ? "home" : "home")} />}
+      {screen === "detail" && activeMatch && (
+        <DetailScreen match={activeMatch} myId={myId}
+          onUpdate={async u => { const nm = matches.map(m => m.id === u.id ? u : m); await saveMatches(nm); }}
+          onDelete={async () => { await saveMatches(matches.filter(m => m.id !== activeId)); setScreen("home"); }}
+          onBack={() => setScreen("home")} />
+      )}
+
+      {/* ── Expenses ── */}
+      {screen === "expenses" && (
+        <ExpensesScreen expenses={expenses} myId={myId}
+          onExpenseClick={id => { setActiveId(id); setScreen("expenseDetail"); }}
+          onNew={() => setScreen("addExpense")} {...nav} />
+      )}
+      {screen === "addExpense" && (
+        <AddExpenseScreen roster={roster}
+          onSave={async e => { await saveExpenses([e, ...expenses]); setScreen("expenses"); }}
+          onBack={() => setScreen("expenses")} />
+      )}
+      {screen === "expenseDetail" && activeExpense && (
+        <ExpenseDetailScreen expense={activeExpense} myId={myId}
+          onUpdate={async u => { const ne = expenses.map(e => e.id === u.id ? u : e); await saveExpenses(ne); }}
+          onDelete={async () => { await saveExpenses(expenses.filter(e => e.id !== activeId)); setScreen("expenses"); }}
+          onBack={() => setScreen("expenses")} />
+      )}
+
+      {/* ── Squad ── */}
       {screen === "squad" && <SquadScreen roster={roster} onUpdate={saveRoster} {...nav} myId={myId} />}
     </div>
   );
