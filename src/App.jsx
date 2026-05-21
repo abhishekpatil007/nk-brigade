@@ -43,6 +43,7 @@ const DEFAULT_SQUAD = ["Praveen","Mahesh S","Karthik","Raghu","Chandu","Harsha",
 
 /* ─── Helpers ─────────────────────────────────────────────── */
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
 function fmtDate(d) { if (!d) return ""; return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", weekday: "short" }); }
 function fmtAmt(n) { return "₹" + Math.round(n).toLocaleString("en-IN"); }
 function generateSummary(match) {
@@ -249,18 +250,33 @@ function PlayerChip({ name, selected, isPayer, onTap, disabled }) {
 }
 
 /* ─── HOME SCREEN — Portfolio Risk Score layout ────────────── */
-function HomeScreen({ matches, myId, onMatchClick, onNew, onMatches, onExpenses, onSquad, onChangeId, onMarkPaid }) {
+function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, onExpenses, onSquad, onChangeId, onMarkPaid }) {
   const total = matches.length;
-  const pendingMs = matches.filter(m => m.players.filter(p => p !== m.payer).some(p => !m.payments[p]));
-  const settledMs = matches.filter(m => m.players.filter(p => p !== m.payer).every(p => m.payments[p]));
-  const myPending = matches.filter(m => myId && m.payer !== myId && m.players.includes(myId) && !m.payments[myId]);
-  const myOwed = myPending.reduce((s, m) => s + m.totalFee / m.players.length, 0);
+  const isSettled = (m) => { const np = (m.players || []).filter(p => p !== m.payer); return np.length > 0 && np.every(p => m.payments?.[p]); };
+  const isPending = (m) => { const np = (m.players || []).filter(p => p !== m.payer); return np.length > 0 && np.some(p => !m.payments?.[p]); };
+  const settledMs = matches.filter(isSettled);
+  const pendingMs  = matches.filter(isPending);
   const barPct = total ? settledMs.length / total : 0;
 
+  /* combine match + expense debt for "Your Balance" */
+  const myPendingMatches  = matches.filter(m => myId && m.payer !== myId && m.players.includes(myId) && !m.payments[myId]);
+  const myPendingExpenses = expenses.filter(e => myId && e.payer !== myId && e.participants.includes(myId) && !e.payments[myId]);
+  const myOwed = myPendingMatches.reduce((s, m) => s + m.totalFee / m.players.length, 0)
+               + myPendingExpenses.reduce((s, e) => s + e.totalAmount / e.participants.length, 0);
+  const myPendingCount = myPendingMatches.length + myPendingExpenses.length;
+  const myPending = myPendingMatches; /* keep for bell badge */
+
+  const balanceSub = myPendingCount === 0
+    ? "You're all settled! 🎉"
+    : [
+        myPendingMatches.length > 0 && `${myPendingMatches.length} match${myPendingMatches.length > 1 ? "es" : ""}`,
+        myPendingExpenses.length > 0 && `${myPendingExpenses.length} expense${myPendingExpenses.length > 1 ? "s" : ""}`,
+      ].filter(Boolean).join(" + ");
+
   const rows = [
-    { dot: C.accent, title: "Pending Matches", sub: pendingMs.length === 0 ? "All fees recovered ✓" : "Awaiting settlement", val: pendingMs.length.toString(), pct: total ? pendingMs.length / total : 0, color: C.accent },
-    { dot: "#ffffff", title: "Settled Matches", sub: settledMs.length === total && total > 0 ? "All matches closed!" : "Fees fully recovered", val: settledMs.length.toString(), pct: total ? settledMs.length / total : 0, color: "#ffffff" },
-    { dot: C.payer, title: "Your Balance", sub: myPending.length === 0 ? "You're all settled! 🎉" : `Owe across ${myPending.length} match${myPending.length > 1 ? "es" : ""}`, val: myPending.length === 0 ? "₹0" : fmtAmt(myOwed), pct: myOwed > 0 ? Math.min(myOwed / 3000, 1) : 0, color: myPending.length === 0 ? C.paid : C.payer },
+    { dot: C.payer,    title: "Your Balance",     sub: balanceSub,                                                                   val: myPendingCount === 0 ? "₹0" : fmtAmt(myOwed),      pct: myOwed > 0 ? Math.min(myOwed / 3000, 1) : 0,         color: myPendingCount === 0 ? C.paid : C.payer },
+    { dot: C.accent,   title: "Pending Matches",  sub: pendingMs.length === 0 ? "All fees recovered ✓" : "Awaiting settlement",     val: pendingMs.length.toString(),                         pct: total ? pendingMs.length / total : 0,                 color: C.accent },
+    { dot: "#ffffff",  title: "Settled Matches",  sub: settledMs.length === total && total > 0 ? "All matches closed!" : "Fees fully recovered", val: settledMs.length.toString(),            pct: total ? settledMs.length / total : 0,                 color: "#ffffff" },
   ];
 
   return (
@@ -306,8 +322,8 @@ function HomeScreen({ matches, myId, onMatchClick, onNew, onMatches, onExpenses,
             <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${barPct * 100}%`, background: `linear-gradient(90deg, ${C.accent} 0%, #ff5050 100%)`, borderRadius: 100, boxShadow: `0 0 10px rgba(225,32,32,0.5)`, transition: "width .6s ease", zIndex: 1 }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: C.sub }}>Low Pending</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: C.sub }}>High Pending</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: C.sub }}>0% settled</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: C.paid }}>All settled ✓</span>
           </div>
         </div>
 
@@ -365,9 +381,9 @@ function HomeScreen({ matches, myId, onMatchClick, onNew, onMatches, onExpenses,
             </button>
           </div>
           {matches.slice(0, 3).map(m => {
-            const np = m.players.filter(p => p !== m.payer);
-            const pc = np.filter(p => m.payments[p]).length;
-            const all = pc === np.length;
+            const np = (m.players || []).filter(p => p !== m.payer);
+            const pc = np.filter(p => m.payments?.[p]).length;
+            const all = np.length > 0 && pc === np.length;
             const share = m.totalFee / m.players.length;
             const iOwe = myId && m.payer !== myId && m.players.includes(myId) && !m.payments[myId];
             return (
@@ -413,9 +429,9 @@ function HomeScreen({ matches, myId, onMatchClick, onNew, onMatches, onExpenses,
 function MatchesScreen({ matches, myId, onMatchClick, onNew, onHome, onExpenses, onSquad, onMarkPaid }) {
   const [filter, setFilter] = useState("all");
   const filtered = matches.filter(m => {
-    const np = m.players.filter(p => p !== m.payer);
-    if (filter === "pending") return np.some(p => !m.payments[p]);
-    if (filter === "settled") return np.every(p => m.payments[p]);
+    const np = (m.players || []).filter(p => p !== m.payer);
+    if (filter === "pending") return np.length > 0 && np.some(p => !m.payments?.[p]);
+    if (filter === "settled") return np.length > 0 && np.every(p => m.payments?.[p]);
     return true;
   });
 
@@ -449,9 +465,9 @@ function MatchesScreen({ matches, myId, onMatchClick, onNew, onHome, onExpenses,
             {filter === "all" ? "No matches yet. Tap + to add one." : `No ${filter} matches.`}
           </div>
         ) : filtered.map(m => {
-          const np = m.players.filter(p => p !== m.payer);
-          const pc = np.filter(p => m.payments[p]).length;
-          const all = pc === np.length;
+          const np = (m.players || []).filter(p => p !== m.payer);
+          const pc = np.filter(p => m.payments?.[p]).length;
+          const all = np.length > 0 && pc === np.length;
           const share = m.totalFee / m.players.length;
           const iOwe = myId && m.payer !== myId && m.players.includes(myId) && !m.payments[myId];
           return (
@@ -735,20 +751,34 @@ function PlayerRow({ name, amount, paid, isPayer, isMe, onToggle, locked }) {
 
 function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
   const [copied, setCopied] = useState(false);
+  /* Local payment state — updated optimistically so rapid toggles never read stale prop */
+  const [pays, setPays] = useState(match.payments || {});
+  useEffect(() => { setPays(match.payments || {}); }, [match.id, match.payments]);
+
   const share = match.totalFee / match.players.length;
-  const nonPayers = match.players.filter(p => p !== match.payer);
-  const paidCount = nonPayers.filter(p => match.payments[p]).length;
-  const allPaid = paidCount === nonPayers.length;
+  const nonPayers = (match.players || []).filter(p => p !== match.payer);
+  const paidCount = nonPayers.filter(p => pays[p]).length;
+  const allPaid = nonPayers.length > 0 && paidCount === nonPayers.length;
   const stillOwed = (nonPayers.length - paidCount) * share;
   const iAmIn = myId && match.players.includes(myId) && myId !== match.payer;
-  const iHavePaid = iAmIn && match.payments[myId];
+  const iHavePaid = iAmIn && !!pays[myId];
   const iAmPayer = myId === match.payer;
 
   /* auth: payer can mark anyone; everyone can mark themselves */
   const canMark = (name) => iAmPayer || myId === name;
 
-  const toggle = async (n) => { await onUpdate({ ...match, payments: { ...match.payments, [n]: !match.payments[n] } }); };
-  const markAll = async () => { const p = { ...match.payments }; nonPayers.forEach(n => { p[n] = true; }); await onUpdate({ ...match, payments: p }); };
+  const toggle = async (n) => {
+    const newVal = !(pays[n] ?? false);
+    const newPays = { ...pays, [n]: newVal };
+    setPays(newPays);
+    await onUpdate({ ...match, payments: newPays });
+  };
+  const markAll = async () => {
+    const newPays = { ...pays };
+    nonPayers.forEach(n => { newPays[n] = true; });
+    setPays(newPays);
+    await onUpdate({ ...match, payments: newPays });
+  };
   const copy = () => { navigator.clipboard?.writeText(generateSummary(match)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
 
   return (
@@ -816,7 +846,7 @@ function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
         )}
         <PlayerRow name={match.payer} amount={share} paid isPayer isMe={iAmPayer} onToggle={null} locked={false} />
         {nonPayers.map(n => (
-          <PlayerRow key={n} name={n} amount={share} paid={!!match.payments[n]} isPayer={false} isMe={myId === n}
+          <PlayerRow key={n} name={n} amount={share} paid={!!pays[n]} isPayer={false} isMe={myId === n}
             onToggle={canMark(n) ? () => toggle(n) : null} locked={!canMark(n)} />
         ))}
       </div>
@@ -962,11 +992,11 @@ function generateExpenseSummary(exp) {
 
 /* ─── EXPENSE CARD ────────────────────────────────────────── */
 function ExpenseCard({ expense: exp, myId, onClick, onMarkPaid }) {
-  const nonPayers = exp.participants.filter(p => p !== exp.payer);
-  const paidCount = nonPayers.filter(p => exp.payments[p]).length;
-  const allPaid = paidCount === nonPayers.length;
+  const nonPayers = (exp.participants || []).filter(p => p !== exp.payer);
+  const paidCount = nonPayers.filter(p => exp.payments?.[p]).length;
+  const allPaid = nonPayers.length > 0 && paidCount === nonPayers.length;
   const share = exp.totalAmount / exp.participants.length;
-  const pct = nonPayers.length ? (paidCount / nonPayers.length) * 100 : 100;
+  const pct = nonPayers.length ? (paidCount / nonPayers.length) * 100 : 0;
   const iOwe = myId && exp.payer !== myId && exp.participants.includes(myId) && !exp.payments[myId];
   return (
     <div style={{ background: C.card, border: `1px solid ${iOwe ? C.accentBorder : allPaid ? C.paidBorder : C.border}`, borderRadius: 18, marginBottom: 10, overflow: "hidden" }}>
@@ -1119,17 +1149,30 @@ function AddExpenseScreen({ roster, onSave, onBack }) {
 /* ─── EXPENSE DETAIL SCREEN ───────────────────────────────── */
 function ExpenseDetailScreen({ expense: exp, myId, onUpdate, onDelete, onBack }) {
   const [copied, setCopied] = useState(false);
+  const [pays, setPays] = useState(exp.payments || {});
+  useEffect(() => { setPays(exp.payments || {}); }, [exp.id, exp.payments]);
+
   const share = exp.totalAmount / exp.participants.length;
-  const nonPayers = exp.participants.filter(p => p !== exp.payer);
-  const paidCount = nonPayers.filter(p => exp.payments[p]).length;
-  const allPaid = paidCount === nonPayers.length;
+  const nonPayers = (exp.participants || []).filter(p => p !== exp.payer);
+  const paidCount = nonPayers.filter(p => pays[p]).length;
+  const allPaid = nonPayers.length > 0 && paidCount === nonPayers.length;
   const stillOwed = (nonPayers.length - paidCount) * share;
   const iAmIn = myId && exp.participants.includes(myId) && myId !== exp.payer;
-  const iHavePaid = iAmIn && exp.payments[myId];
+  const iHavePaid = iAmIn && !!pays[myId];
   const iAmPayer = myId === exp.payer;
   const canMark = (name) => iAmPayer || myId === name;
-  const toggle = async (n) => { await onUpdate({ ...exp, payments: { ...exp.payments, [n]: !exp.payments[n] } }); };
-  const markAll = async () => { const p = { ...exp.payments }; nonPayers.forEach(n => { p[n] = true; }); await onUpdate({ ...exp, payments: p }); };
+  const toggle = async (n) => {
+    const newVal = !(pays[n] ?? false);
+    const newPays = { ...pays, [n]: newVal };
+    setPays(newPays);
+    await onUpdate({ ...exp, payments: newPays });
+  };
+  const markAll = async () => {
+    const newPays = { ...pays };
+    nonPayers.forEach(n => { newPays[n] = true; });
+    setPays(newPays);
+    await onUpdate({ ...exp, payments: newPays });
+  };
   const copy = () => { navigator.clipboard?.writeText(generateExpenseSummary(exp)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
 
   return (
@@ -1192,7 +1235,7 @@ function ExpenseDetailScreen({ expense: exp, myId, onUpdate, onDelete, onBack })
         )}
         <PlayerRow name={exp.payer} amount={share} paid isPayer isMe={iAmPayer} onToggle={null} locked={false} />
         {nonPayers.map(n => (
-          <PlayerRow key={n} name={n} amount={share} paid={!!exp.payments[n]} isPayer={false} isMe={myId === n}
+          <PlayerRow key={n} name={n} amount={share} paid={!!pays[n]} isPayer={false} isMe={myId === n}
             onToggle={canMark(n) ? () => toggle(n) : null} locked={!canMark(n)} />
         ))}
       </div>
@@ -1201,7 +1244,7 @@ function ExpenseDetailScreen({ expense: exp, myId, onUpdate, onDelete, onBack })
 }
 
 /* ─── EXPENSES SCREEN ─────────────────────────────────────── */
-function ExpensesScreen({ expenses, myId, onExpenseClick, onNew, onHome, onMatches, onExpenses, onSquad }) {
+function ExpensesScreen({ expenses, myId, onExpenseClick, onNew, onMarkPaid, onHome, onMatches, onExpenses, onSquad }) {
   const myPending = expenses.filter(e => myId && e.payer !== myId && e.participants.includes(myId) && !e.payments[myId]);
   const myOwed = myPending.reduce((s, e) => s + e.totalAmount / e.participants.length, 0);
   const totalSpend = expenses.reduce((s, e) => s + e.totalAmount, 0);
@@ -1252,7 +1295,7 @@ function ExpensesScreen({ expenses, myId, onExpenseClick, onNew, onHome, onMatch
           </div>
         ) : (
           expenses.map(e => (
-            <ExpenseCard key={e.id} expense={e} myId={myId} onClick={() => onExpenseClick(e.id)} onMarkPaid={() => {}} />
+            <ExpenseCard key={e.id} expense={e} myId={myId} onClick={() => onExpenseClick(e.id)} onMarkPaid={onMarkPaid} />
           ))
         )}
       </div>
@@ -1339,7 +1382,7 @@ export default function App() {
       <Fonts />
 
       {/* ── Matches ── */}
-      {screen === "home" && <HomeScreen matches={matches} myId={myId} onMatchClick={id => { setActiveId(id); setScreen("detail"); }} onNew={() => setScreen("new")} {...nav} onChangeId={() => setShowIdPicker(true)} onMarkPaid={handleMarkPaid} />}
+      {screen === "home" && <HomeScreen matches={matches} expenses={expenses} myId={myId} onMatchClick={id => { setActiveId(id); setScreen("detail"); }} onNew={() => setScreen("new")} {...nav} onChangeId={() => setShowIdPicker(true)} onMarkPaid={handleMarkPaid} />}
       {screen === "matches" && <MatchesScreen matches={matches} myId={myId} onMatchClick={id => { setActiveId(id); setScreen("detail"); }} onNew={() => setScreen("new")} {...nav} onMarkPaid={handleMarkPaid} />}
       {screen === "new" && <NewMatchScreen roster={roster} matches={matches} onSave={async m => { await saveMatches([m, ...matches]); setScreen("home"); }} onBack={() => setScreen("home")} />}
       {screen === "detail" && activeMatch && (
@@ -1353,7 +1396,7 @@ export default function App() {
       {screen === "expenses" && (
         <ExpensesScreen expenses={expenses} myId={myId}
           onExpenseClick={id => { setActiveId(id); setScreen("expenseDetail"); }}
-          onNew={() => setScreen("addExpense")} {...nav} />
+          onNew={() => setScreen("addExpense")} onMarkPaid={handleMarkExpensePaid} {...nav} />
       )}
       {screen === "addExpense" && (
         <AddExpenseScreen roster={roster}
