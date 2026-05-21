@@ -1,6 +1,6 @@
-# MAK Champions — Cricket Match Fee Tracker
+# NK Brigade — Cricket Match Fee Tracker
 
-A real-time match fee tracker for the MAK Champions WhatsApp cricket group. Each match records who paid upfront, which players participated, and tracks individual payback status. All 12 players share the same live view — when anyone marks themselves as paid, everyone sees it instantly.
+A real-time match fee tracker for the NK Brigade WhatsApp cricket group. Each match records who paid upfront, which players participated, and tracks individual payback status. All players share the same live view — when anyone marks themselves as paid, everyone sees it instantly.
 
 ---
 
@@ -27,20 +27,17 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173/mak-cricket/](http://localhost:5173/mak-cricket/)
+Open [http://localhost:5173/nk-brigade/](http://localhost:5173/nk-brigade/)
 
 ---
 
 ## Deploy to GitHub Pages
 
-1. Create a GitHub repo named `mak-cricket`.
+1. Create a GitHub repo named `nk-brigade`.
 2. Push the code:
 
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/YOUR_USERNAME/mak-cricket.git
+git remote set-url origin https://github.com/YOUR_USERNAME/nk-brigade.git
 git push -u origin main
 ```
 
@@ -52,10 +49,10 @@ npm run deploy
 
 4. In GitHub repo → **Settings → Pages**, set source to `gh-pages` branch.
 
-Your app will be live at: **https://YOUR_USERNAME.github.io/mak-cricket/**
+Your app will be live at: **https://YOUR_USERNAME.github.io/nk-brigade/**
 
 ---
 
 ## Share with the Squad
 
-Send the GitHub Pages URL to the WhatsApp group. On first open, each player taps their name — this is saved on their device only. Match data and payment status sync in real time across all devices via Supabase.
+Send the GitHub Pages URL to the WhatsApp group. On first open, each player taps their name — saved only on their device, no login needed. Match data and payment status sync in real time across all devices via Supabase.

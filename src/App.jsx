@@ -34,10 +34,10 @@ const DB = {
   },
 };
 const identity = {
-  get: () => { try { return localStorage.getItem("mak-identity"); } catch { return null; } },
-  set: (n) => { try { localStorage.setItem("mak-identity", n); } catch {} },
+  get: () => { try { return localStorage.getItem("nk-identity"); } catch { return null; } },
+  set: (n) => { try { localStorage.setItem("nk-identity", n); } catch {} },
 };
-const SK = { roster: "mak-roster-v4", matches: "mak-matches-v4" };
+const SK = { roster: "nk-roster-v1", matches: "nk-matches-v1" };
 const DEFAULT_SQUAD = ["Praveen","Mahesh S","Karthik","Raghu","Chandu","Harsha","Anand","Mahesh P","Anand P","Chetan","Shrishail","Balaji"];
 
 /* ─── Helpers ─────────────────────────────────────────────── */
@@ -49,7 +49,7 @@ function generateSummary(match) {
   const nonPayers = match.players.filter(p => p !== match.payer);
   const paidCount = nonPayers.filter(p => match.payments[p]).length;
   return [
-    `🏏 MAK Champions — ${fmtDate(match.date)} (${match.format})`,
+    `🏏 NK Brigade — ${fmtDate(match.date)} (${match.format})`,
     `Match fee: ${fmtAmt(match.totalFee)} ÷ ${match.players.length} = ${fmtAmt(share)}/person`,
     `Paid by: ${match.payer} 💰`, ``,
     `${match.payer} ✅`,
@@ -154,7 +154,7 @@ function OnboardingScreen({ roster, current, onSelect, onBack }) {
   if (intro) return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
       <div style={{ width: 76, height: 76, borderRadius: 22, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, marginBottom: 20, boxShadow: "0 14px 40px rgba(225,32,32,0.4)" }}>🏏</div>
-      <div style={{ fontSize: 44, fontWeight: 800, color: C.text, letterSpacing: -1, textAlign: "center", lineHeight: 1.05, marginBottom: 4 }}>MAK<br /><span style={{ color: C.accent }}>Champions</span></div>
+      <div style={{ fontSize: 44, fontWeight: 800, color: C.text, letterSpacing: -1, textAlign: "center", lineHeight: 1.05, marginBottom: 4 }}>NK<br /><span style={{ color: C.accent }}>Brigade</span></div>
       <div style={{ fontSize: 13, fontWeight: 500, color: C.sub, marginBottom: 36, textAlign: "center" }}>Cricket match fee tracker</div>
       {[
         { icon: "🏏", t: "Log Each Match", d: "Record date, format, total ground fee and who played" },
@@ -1021,7 +1021,7 @@ export default function App() {
       setMyId(identity.get());
       setReady(true);
     })();
-    const ch = supabase.channel("mak-realtime")
+    const ch = supabase.channel("nk-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "mak_data" }, (p) => {
         if (!p.new) return;
         if (p.new.key === SK.matches) setMatches(p.new.value || []);
@@ -1043,7 +1043,7 @@ export default function App() {
   if (!ready) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: F.sans }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontFamily: F.mono, fontSize: 54, color: C.accent, letterSpacing: 4, lineHeight: 1, fontWeight: 600 }}>MAK</div>
+        <div style={{ fontFamily: F.mono, fontSize: 54, color: C.accent, letterSpacing: 4, lineHeight: 1, fontWeight: 600 }}>NK</div>
         <div style={{ fontSize: 13, fontWeight: 500, color: C.sub, marginTop: 10 }}>Loading…</div>
       </div>
     </div>
