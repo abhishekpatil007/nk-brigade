@@ -57,7 +57,7 @@ function generateSummary(match) {
   const nonPayers = match.players.filter(p => p !== match.payer);
   const paidCount = nonPayers.filter(p => match.payments[p]).length;
   return [
-    `🏏 NK Brigade — ${fmtDate(match.date)} (${match.format})`,
+    `🏏 NK Brigade — ${match.name || fmtDate(match.date)} (${match.format})`,
     `Match fee: ${fmtAmt(match.totalFee)} ÷ ${match.players.length} = ${fmtAmt(share)}/person`,
     `Paid by: ${match.payer} 💰`, ``,
     `${match.payer} ✅`,
@@ -452,8 +452,8 @@ function HomeScreen({ matches, expenses, myId, onMatchClick, onNew, onMatches, o
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ width: 44, height: 44, borderRadius: 14, background: all ? C.paidBg : C.accentBg, border: `1px solid ${all ? C.paidBorder : C.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🏏</div>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>{fmtDate(m.date)}</div>
-                        <div style={{ fontSize: 11, fontWeight: 400, color: C.sub }}>💰 {m.payer} · {m.format} · {m.players.length}p</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>{m.name || fmtDate(m.date)}</div>
+                        <div style={{ fontSize: 11, fontWeight: 400, color: C.sub }}>{m.name ? fmtDate(m.date) + " · " : ""}💰 {m.payer} · {m.format} · {m.players.length}p</div>
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
@@ -534,8 +534,9 @@ function MatchesScreen({ matches, myId, onMatchClick, onNew, onHome, onExpenses,
               <div style={{ padding: "16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 5 }}>{fmtDate(m.date)}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 5 }}>{m.name || fmtDate(m.date)}</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {m.name && <span style={{ fontFamily: F.mono, fontSize: 10, color: C.sub }}>{fmtDate(m.date)}</span>}
                       <span style={{ fontFamily: F.mono, fontSize: 10, color: C.sub, background: C.card2, padding: "2px 8px", borderRadius: 6, border: `1px solid ${C.border}` }}>{m.format}</span>
                       <span style={{ fontSize: 11, fontWeight: 500, color: C.payer }}>💰 {m.payer}</span>
                       <span style={{ fontSize: 11, fontWeight: 400, color: C.sub }}>· {m.players.length} players</span>
@@ -572,7 +573,7 @@ function MatchesScreen({ matches, myId, onMatchClick, onNew, onHome, onExpenses,
 /* ─── NEW MATCH — fully inline, no modal, no dropdowns ───── */
 function NewMatchScreen({ roster, matches, onSave, onBack }) {
   const today = new Date().toISOString().split("T")[0];
-  const [form, setForm] = useState({ date: today, format: "T-30", totalFee: "", payer: "", players: [] });
+  const [form, setForm] = useState({ name: "", date: today, format: "T-30", totalFee: "", payer: "", players: [] });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -614,7 +615,7 @@ function NewMatchScreen({ roster, matches, onSave, onBack }) {
     setSaving(true);
     const payments = {};
     form.players.forEach(p => { payments[p] = (p === form.payer); });
-    await onSave({ id: uid(), date: form.date, format: form.format, totalFee: fee, payer: form.payer, players: form.players, payments, createdAt: Date.now() });
+    await onSave({ id: uid(), name: form.name.trim(), date: form.date, format: form.format, totalFee: fee, payer: form.payer, players: form.players, payments, createdAt: Date.now() });
     setSaving(false);
   };
 
@@ -635,6 +636,13 @@ function NewMatchScreen({ roster, matches, onSave, onBack }) {
         {/* ── STEP 1 ── */}
         <StepLabel n="1" title="Match Details" done={step1Done}
           count={step1Done ? `${form.format} · ${fmtAmt(fee)}` : null} />
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={lbl}>Match Name <span style={{ color: C.muted2, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+          <input value={form.name} onChange={e => set("name", e.target.value)}
+            placeholder="e.g. Sunday League, Koramangala Ground…"
+            style={iStyle()} />
+        </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
           <div>
@@ -842,7 +850,7 @@ function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
 
   return (
     <div style={{ paddingBottom: 40, background: C.bg, minHeight: "100vh" }}>
-      <Header title="Match Detail" subtitle={fmtDate(match.date)} onBack={onBack} right={
+      <Header title={match.name || "Match Detail"} subtitle={match.name ? fmtDate(match.date) : undefined} onBack={onBack} right={
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={copy} style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 10, color: copied ? C.paid : C.accent, cursor: "pointer", padding: "7px 13px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
             {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Share</>}
@@ -868,7 +876,7 @@ function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
 
       <div style={{ margin: "12px 20px 0", background: C.card, borderRadius: 18, padding: "16px", border: `1px solid ${C.border}` }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {[{ l: "Date", v: fmtDate(match.date) }, { l: "Format", v: match.format }, { l: "Total Fee", v: fmtAmt(match.totalFee) }, { l: "Per Person", v: fmtAmt(share) }].map(f => (
+          {[match.name && { l: "Name", v: match.name }, { l: "Date", v: fmtDate(match.date) }, { l: "Format", v: match.format }, { l: "Total Fee", v: fmtAmt(match.totalFee) }, { l: "Per Person", v: fmtAmt(share) }].filter(Boolean).map(f => (
             <div key={f.l}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{f.l}</div>
               <div style={{ fontFamily: F.mono, fontSize: 16, fontWeight: 600, color: C.text }}>{f.v}</div>
