@@ -644,16 +644,20 @@ function NewMatchScreen({ roster, matches, onSave, onBack }) {
             style={iStyle()} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          <div>
-            <label style={lbl}>Date</label>
-            <input type="date" value={form.date} onChange={e => set("date", e.target.value)} style={iStyle()} />
-          </div>
-          <div>
-            <label style={lbl}>Format</label>
-            <select value={form.format} onChange={e => set("format", e.target.value)} style={iStyle()}>
-              {["T-20","T-30","T-40","ODI"].map(f => <option key={f}>{f}</option>)}
-            </select>
+        <div style={{ marginBottom: 12 }}>
+          <label style={lbl}>Date</label>
+          <input type="date" value={form.date} onChange={e => set("date", e.target.value)} style={iStyle()} />
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={lbl}>Format</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {["T-20","T-30","T-40","ODI"].map(f => (
+              <button key={f} onClick={() => set("format", f)}
+                style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: `2px solid ${form.format === f ? C.accentBorder : C.border}`, background: form.format === f ? C.accentBg : C.card, color: form.format === f ? C.accent : C.sub, fontSize: 14, fontWeight: form.format === f ? 800 : 500, cursor: "pointer", transition: "all .15s" }}>
+                {f}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -1145,9 +1149,12 @@ function AddExpenseScreen({ roster, onSave, onBack }) {
             placeholder="e.g. Team lunch at Hotel Udupi, Post-match snacks…"
             style={iStyle()} autoFocus />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          <div><label style={lbl}>Date</label><input type="date" value={form.date} onChange={e => set("date", e.target.value)} style={iStyle()} /></div>
-          <div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={lbl}>Date</label>
+            <input type="date" value={form.date} onChange={e => set("date", e.target.value)} style={iStyle()} />
+          </div>
+          <div style={{ flex: 1 }}>
             <label style={lbl}>Total Amount</label>
             <div style={{ position: "relative" }}>
               <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontFamily: F.mono, fontWeight: 600, fontSize: 18, color: amount > 0 ? C.sub : C.muted2, pointerEvents: "none" }}>₹</span>
