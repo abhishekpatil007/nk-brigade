@@ -55,15 +55,34 @@ function fmtAmt(n) { return "₹" + Math.round(n).toLocaleString("en-IN"); }
 function generateSummary(match) {
   const share = match.totalFee / match.players.length;
   const nonPayers = match.players.filter(p => p !== match.payer);
-  const paidCount = nonPayers.filter(p => match.payments[p]).length;
-  return [
-    `🏏 NK Brigade — ${match.name || fmtDate(match.date)} (${match.format})`,
-    `Match fee: ${fmtAmt(match.totalFee)} ÷ ${match.players.length} = ${fmtAmt(share)}/person`,
-    `Paid by: ${match.payer} 💰`, ``,
-    `${match.payer} ✅`,
-    ...nonPayers.map(p => `${p} ${match.payments[p] ? "✅" : "❌"}`),
-    ``, `${paidCount}/${nonPayers.length} settled`,
-  ].join("\n");
+  const paid   = nonPayers.filter(p =>  match.payments[p]);
+  const unpaid = nonPayers.filter(p => !match.payments[p]);
+  const allDone = unpaid.length === 0;
+  const lines = [
+    `🏏 *NK Brigade — Match Summary*`,
+    match.name ? `📌 *${match.name}*` : null,
+    `📅 ${fmtDate(match.date)} · ${match.format} · ${match.players.length} players`,
+    `💰 ${fmtAmt(match.totalFee)} total  ›  *${fmtAmt(share)} per person*`,
+    ``,
+    `*Paid upfront:* ${match.payer} 💰`,
+    ``,
+  ].filter(l => l !== null);
+
+  if (paid.length > 0) {
+    lines.push(`✅ *Settled (${paid.length}/${nonPayers.length})*`);
+    paid.forEach(p => lines.push(`   • ${p}`));
+    lines.push(``);
+  }
+  if (unpaid.length > 0) {
+    lines.push(`❌ *Still pending (${unpaid.length}/${nonPayers.length})*`);
+    unpaid.forEach(p => lines.push(`   • ${p}`));
+    lines.push(``);
+  }
+  lines.push(allDone
+    ? `🎉 *All settled! Great job NK Brigade!*`
+    : `👉 Please pay *${fmtAmt(share)}* to *${match.payer}*`
+  );
+  return lines.join("\n");
 }
 
 /* ─── Semi-circular gauge (matches reference exactly) ──────── */
@@ -252,6 +271,86 @@ function PlayerChip({ name, selected, isPayer, onTap, disabled }) {
         </div>
       )}
     </button>
+  );
+}
+
+/* ─── Share Modal ─────────────────────────────────────────── */
+function ShareModal({ text, title, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const canShare = typeof navigator !== "undefined" && !!navigator.share;
+
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  const handleShare = () => {
+    navigator.share({ title: "NK Brigade", text }).catch(() => {});
+  };
+
+  /* render WhatsApp-style bold (*text*) as visual bold in preview */
+  const renderPreview = (raw) =>
+    raw.split("\n").map((line, i) => {
+      const parts = line.split(/(\*[^*]+\*)/g);
+      return (
+        <div key={i} style={{ minHeight: "1.5em" }}>
+          {parts.map((p, j) =>
+            p.startsWith("*") && p.endsWith("*")
+              ? <span key={j} style={{ fontWeight: 800, color: C.text }}>{p.slice(1, -1)}</span>
+              : <span key={j} style={{ color: p.trim() === "" ? "transparent" : C.sub }}>{p || " "}</span>
+          )}
+        </div>
+      );
+    });
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 60, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: C.surf, borderRadius: "22px 22px 0 0", padding: "0 0 32px", boxShadow: "0 -20px 60px rgba(0,0,0,0.6)" }}>
+
+        {/* Handle */}
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 100, background: C.muted }} />
+        </div>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px 14px" }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, letterSpacing: -0.3 }}>Share Summary</div>
+            <div style={{ fontSize: 12, fontWeight: 400, color: C.sub, marginTop: 2 }}>{title}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: C.sub }}>
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Preview card */}
+        <div style={{ margin: "0 16px 16px", background: C.card, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div style={{ padding: "10px 14px 6px", borderBottom: `1px solid ${C.div}`, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.paid }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: C.sub }}>Preview · WhatsApp formatted</span>
+          </div>
+          <div style={{ padding: "14px 16px", maxHeight: 280, overflowY: "auto", fontSize: 13, lineHeight: 1.65, fontFamily: F.sans }}>
+            {renderPreview(text)}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 10, padding: "0 16px" }}>
+          <button onClick={handleCopy}
+            style={{ flex: 1, padding: "15px", background: copied ? C.paidBg : C.accentBg, border: `1px solid ${copied ? C.paidBorder : C.accentBorder}`, borderRadius: 16, color: copied ? C.paid : C.accent, fontWeight: 800, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
+            {copied ? <><Check size={16} /> Copied!</> : <><Copy size={16} /> Copy Text</>}
+          </button>
+          {canShare && (
+            <button onClick={handleShare}
+              style={{ flex: 1, padding: "15px", background: C.accent, border: "none", borderRadius: 16, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 6px 20px rgba(225,32,32,0.4)" }}>
+              Share →
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -821,7 +920,7 @@ function PlayerRow({ name, amount, paid, isPayer, isMe, onToggle, locked }) {
 }
 
 function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
-  const [copied, setCopied] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   /* Local payment state — updated optimistically so rapid toggles never read stale prop */
   const [pays, setPays] = useState(match.payments || {});
   useEffect(() => { setPays(match.payments || {}); }, [match.id, match.payments]);
@@ -850,14 +949,13 @@ function DetailScreen({ match, myId, onUpdate, onDelete, onBack }) {
     setPays(newPays);
     await onUpdate({ ...match, payments: newPays });
   };
-  const copy = () => { navigator.clipboard?.writeText(generateSummary(match)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
-
   return (
     <div style={{ paddingBottom: 40, background: C.bg, minHeight: "100vh" }}>
+      {showShare && <ShareModal text={generateSummary(match)} title={match.name || fmtDate(match.date)} onClose={() => setShowShare(false)} />}
       <Header title={match.name || "Match Detail"} subtitle={match.name ? fmtDate(match.date) : undefined} onBack={onBack} right={
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={copy} style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 10, color: copied ? C.paid : C.accent, cursor: "pointer", padding: "7px 13px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
-            {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Share</>}
+          <button onClick={() => setShowShare(true)} style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 10, color: C.accent, cursor: "pointer", padding: "7px 13px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+            <Copy size={13} /> Share
           </button>
           <button onClick={onDelete} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.sub, cursor: "pointer", padding: "7px 10px", display: "flex" }}><Trash2 size={15} /></button>
         </div>
@@ -1049,16 +1147,33 @@ function SquadScreen({ roster, onUpdate, onHome, onMatches, onExpenses, myId }) 
 function generateExpenseSummary(exp) {
   const share = exp.totalAmount / exp.participants.length;
   const nonPayers = exp.participants.filter(p => p !== exp.payer);
-  const paidCount = nonPayers.filter(p => exp.payments[p]).length;
-  return [
-    `🍽️ NK Brigade — ${exp.description}`,
-    `Date: ${fmtDate(exp.date)}`,
-    `Amount: ${fmtAmt(exp.totalAmount)} ÷ ${exp.participants.length} = ${fmtAmt(share)}/person`,
-    `Paid by: ${exp.payer} 💰`, ``,
-    `${exp.payer} ✅`,
-    ...nonPayers.map(p => `${p} ${exp.payments[p] ? "✅" : "❌"}`),
-    ``, `${paidCount}/${nonPayers.length} settled`,
-  ].join("\n");
+  const paid   = nonPayers.filter(p =>  exp.payments[p]);
+  const unpaid = nonPayers.filter(p => !exp.payments[p]);
+  const allDone = unpaid.length === 0;
+  const lines = [
+    `🍽️ *NK Brigade — Expense Summary*`,
+    `📌 *${exp.description}*`,
+    `📅 ${fmtDate(exp.date)} · ${exp.participants.length} people`,
+    `💸 ${fmtAmt(exp.totalAmount)} total  ›  *${fmtAmt(share)} per person*`,
+    ``,
+    `*Paid the bill:* ${exp.payer} 💰`,
+    ``,
+  ];
+  if (paid.length > 0) {
+    lines.push(`✅ *Settled (${paid.length}/${nonPayers.length})*`);
+    paid.forEach(p => lines.push(`   • ${p}`));
+    lines.push(``);
+  }
+  if (unpaid.length > 0) {
+    lines.push(`❌ *Still pending (${unpaid.length}/${nonPayers.length})*`);
+    unpaid.forEach(p => lines.push(`   • ${p}`));
+    lines.push(``);
+  }
+  lines.push(allDone
+    ? `🎉 *All settled! Cheers!*`
+    : `👉 Please pay *${fmtAmt(share)}* to *${exp.payer}*`
+  );
+  return lines.join("\n");
 }
 
 /* ─── EXPENSE CARD ────────────────────────────────────────── */
@@ -1222,7 +1337,7 @@ function AddExpenseScreen({ roster, onSave, onBack }) {
 
 /* ─── EXPENSE DETAIL SCREEN ───────────────────────────────── */
 function ExpenseDetailScreen({ expense: exp, myId, onUpdate, onDelete, onBack }) {
-  const [copied, setCopied] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [pays, setPays] = useState(exp.payments || {});
   useEffect(() => { setPays(exp.payments || {}); }, [exp.id, exp.payments]);
 
@@ -1247,14 +1362,13 @@ function ExpenseDetailScreen({ expense: exp, myId, onUpdate, onDelete, onBack })
     setPays(newPays);
     await onUpdate({ ...exp, payments: newPays });
   };
-  const copy = () => { navigator.clipboard?.writeText(generateExpenseSummary(exp)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
-
   return (
     <div style={{ paddingBottom: 40, background: C.bg, minHeight: "100vh" }}>
+      {showShare && <ShareModal text={generateExpenseSummary(exp)} title={exp.description} onClose={() => setShowShare(false)} />}
       <Header title="Expense Detail" subtitle={exp.description} onBack={onBack} right={
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={copy} style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 10, color: copied ? C.paid : C.accent, cursor: "pointer", padding: "7px 13px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
-            {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Share</>}
+          <button onClick={() => setShowShare(true)} style={{ background: C.accentBg, border: `1px solid ${C.accentBorder}`, borderRadius: 10, color: C.accent, cursor: "pointer", padding: "7px 13px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+            <Copy size={13} /> Share
           </button>
           <button onClick={onDelete} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, color: C.sub, cursor: "pointer", padding: "7px 10px", display: "flex" }}><Trash2 size={15} /></button>
         </div>
